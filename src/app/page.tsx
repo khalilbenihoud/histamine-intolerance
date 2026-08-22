@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { foods, CATEGORIES, TIERS, type Category, type Tier } from "@/data/foods";
+import { conditions, type Category, type Tier } from "@/data/conditions";
 
 const TIER_COLORS: Record<Tier, string> = {
   0: "var(--tier-0)",
@@ -28,25 +28,29 @@ const jitter = (name: string, spread = 1.6) => {
 };
 
 export default function Home() {
+  const [conditionId, setConditionId] = useState(conditions[0].id);
   const [category, setCategory] = useState<Category | "All">("All");
   const [tierFilter, setTierFilter] = useState<Tier | "All">("All");
   const [query, setQuery] = useState("");
   const [hover, setHover] = useState<string | null>(null);
 
+  const condition = conditions.find((c) => c.id === conditionId) ?? conditions[0];
+  const { items, tiers, categories, xMetric, yMetric } = condition;
+
   const q = query.trim().toLowerCase();
 
   const points = useMemo(() => {
-    const pts = foods.map((f) => {
+    const pts = items.map((f) => {
       const matchesCat = category === "All" || f.category === category;
       const matchesTier = tierFilter === "All" || f.tier === tierFilter;
       const matchesQuery = q === "" || f.name.toLowerCase().includes(q);
       return {
         ...f,
         active: matchesCat && matchesTier && matchesQuery,
-        cx: x(f.histamine + jitter(f.name)),
-        cy: y(f.trigger + jitter(f.name + "y")),
-        homeX: x(f.histamine),
-        homeY: y(f.trigger),
+        cx: x(f.x + jitter(f.name)),
+        cy: y(f.y + jitter(f.name + "y")),
+        homeX: x(f.x),
+        homeY: y(f.y),
       };
     });
 
@@ -83,7 +87,7 @@ export default function Home() {
       }
     }
     return pts;
-  }, [category, tierFilter, q]);
+  }, [items, category, tierFilter, q]);
 
   const activeCount = points.filter((p) => p.active).length;
   const hovered = points.find((p) => p.name === hover) ?? null;
@@ -92,18 +96,47 @@ export default function Home() {
     <main className="viz-root min-h-screen px-5 py-8 sm:px-8 lg:px-12">
       <div className="mx-auto max-w-6xl">
         <header className="mb-6">
+          {/* Condition switcher */}
+          <div className="mb-5 inline-flex rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-1">
+            {conditions.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => {
+                  setConditionId(c.id);
+                  setCategory("All");
+                  setTierFilter("All");
+                  setHover(null);
+                }}
+                className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                  c.id === conditionId
+                    ? "bg-[var(--surface-2)] text-[var(--foreground)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                }`}
+              >
+                {c.switchLabel}
+              </button>
+            ))}
+          </div>
+
           <p className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)]">
-            Histamine intolerance
+            {condition.kicker}
           </p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
-            The Histamine Food Map
+            {condition.title}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--text-secondary)]">
-            {foods.length} everyday foods plotted by their own{" "}
-            <strong>histamine content</strong> and their{" "}
-            <strong>additional trigger load</strong> — histamine liberators,
-            DAO-blockers and other biogenic amines. Bottom-left is safest;
-            top-right is best avoided.
+            {items.length} {condition.description}
+          </p>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
+            Source:{" "}
+            <a
+              href={condition.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-[var(--text-secondary)]"
+            >
+              {condition.sourceName}
+            </a>
           </p>
         </header>
 
@@ -116,18 +149,32 @@ export default function Home() {
             placeholder="Find a food…"
             className="h-10 w-56 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 text-sm outline-none focus:border-[var(--text-secondary)]"
           />
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as Category | "All")}
-            className="h-10 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 text-sm outline-none"
-          >
-            <option value="All">All categories</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as Category | "All")}
+              className="h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface-1)] pl-3 pr-9 text-sm outline-none focus:border-[var(--text-secondary)]"
+            >
+              <option value="All">All categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
           <span className="text-sm text-[var(--text-muted)]">
             {activeCount} shown
           </span>
@@ -140,7 +187,7 @@ export default function Home() {
             active={tierFilter === "All"}
             onClick={() => setTierFilter("All")}
           />
-          {TIERS.map((t) => (
+          {tiers.map((t) => (
             <TierChip
               key={t.tier}
               label={t.label}
@@ -159,7 +206,7 @@ export default function Home() {
             viewBox={`0 0 ${W} ${H}`}
             className="w-full"
             role="img"
-            aria-label="Scatter plot of foods by histamine content and trigger load"
+            aria-label={`Scatter plot of foods by ${xMetric} and ${yMetric}`}
           >
             {/* Quadrant fills */}
             <rect x={x(0)} y={y(50)} width={plotW / 2} height={plotH / 2} fill="var(--tier-0)" opacity="0.05" />
@@ -185,22 +232,22 @@ export default function Home() {
 
             {/* Axis titles */}
             <text x={PAD.left + plotW / 2} y={H - 8} textAnchor="middle" className="axis-title">
-              Histamine content  →
+              {condition.xLabel}
             </text>
             <text
               transform={`translate(16, ${PAD.top + plotH / 2}) rotate(-90)`}
               textAnchor="middle"
               className="axis-title"
             >
-              Trigger load (liberators · DAO-block)  →
+              {condition.yLabel}
             </text>
 
             {/* Quadrant captions */}
             <text x={x(4)} y={y(96)} className="quad-label" fill="var(--tier-0)">
-              SAFE ZONE
+              {condition.safeLabel}
             </text>
             <text x={x(96)} y={y(4)} textAnchor="end" className="quad-label" fill="var(--tier-3)">
-              AVOID
+              {condition.avoidLabel}
             </text>
 
             {/* Inactive points first (dimmed) */}
@@ -284,14 +331,14 @@ export default function Home() {
                 </span>
               </div>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
-                {hovered.category} · {TIERS[hovered.tier].label}
+                {hovered.category} · {tiers[hovered.tier].label}
               </p>
               <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
                 {hovered.note}
               </p>
               <div className="mt-2 flex gap-4 text-xs tabular-nums text-[var(--text-secondary)]">
-                <span>Histamine {hovered.histamine}</span>
-                <span>Trigger {hovered.trigger}</span>
+                <span>{xMetric} {hovered.x}</span>
+                <span>{yMetric} {hovered.y}</span>
               </div>
             </div>
           )}
@@ -321,7 +368,7 @@ export default function Home() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{p.name}</p>
                     <p className="truncate text-xs text-[var(--text-muted)]">
-                      {p.category} · {TIERS[p.tier].label}
+                      {p.category} · {tiers[p.tier].label}
                     </p>
                   </div>
                 </div>
@@ -330,10 +377,7 @@ export default function Home() {
         </section>
 
         <footer className="mt-10 border-t border-[var(--border)] pt-4 text-xs leading-relaxed text-[var(--text-muted)]">
-          Educational overview only — not medical advice. Histamine tolerance is
-          highly individual, and a food&apos;s histamine level changes sharply
-          with freshness, ripeness, storage and preparation. Ratings are aligned
-          with common histamine-intolerance food compatibility lists.
+          {condition.footer}
         </footer>
       </div>
     </main>
